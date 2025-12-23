@@ -11,6 +11,7 @@
 <nav class="navbar navbar-dark bg-primary">
   <div class="container-fluid">
     <a class="navbar-brand" href="/dashboard">Health App</a>
+    <span id="authStatus" class="text-white"></span>
   </div>
 </nav>
 
@@ -19,25 +20,26 @@
   <div id="users"></div>
 </div>
 
+<script src="/static/auth.js"></script>
 <script>
 async function loadUsers(){
+  if(!AUTH.requireAuth()) return;
+  
   try{
-    const res = await fetch('/api/users');
-    if(res.status === 401){
-      document.getElementById('users').textContent = 'Authentication required. Please login to view users.';
-      return;
-    }
+    const res = await AUTH.fetchWithAuth('/api/users');
     const data = await res.json();
-    if(data.status === 'success'){
+    if(res.ok && data.status === 'success'){
       const el = document.getElementById('users');
       el.innerHTML = '<ul class="list-group">' + data.data.users.map(u => `<li class="list-group-item">${u}</li>`).join('') + '</ul>';
     }else{
-      document.getElementById('users').textContent = JSON.stringify(data);
+      document.getElementById('users').innerHTML = '<div class="alert alert-danger">' + (data.message || 'Failed to load users') + '</div>';
     }
   }catch(e){
-    document.getElementById('users').textContent = 'Error loading users.';
+    document.getElementById('users').innerHTML = '<div class="alert alert-danger">Error loading users: ' + e.message + '</div>';
   }
 }
+
+document.getElementById('authStatus').textContent = AUTH.isAuthenticated() ? '✓ Authenticated' : 'Not authenticated';
 loadUsers();
 </script>
 </body>

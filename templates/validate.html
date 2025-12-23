@@ -11,56 +11,61 @@
 <nav class="navbar navbar-dark bg-primary">
   <div class="container-fluid">
     <a class="navbar-brand" href="/dashboard">Health App</a>
+    <span id="authStatus" class="text-white"></span>
   </div>
 </nav>
 
 <div class="container py-4">
   <h1>Validate Health Data</h1>
-  <form id="validateForm">
+  <form id="validateForm" class="mb-4">
     <div class="mb-3">
-      <label class="form-label">Heart Rate</label>
-      <input type="number" class="form-control" name="heart_rate" placeholder="e.g. 78">
+      <label class="form-label">Heart Rate (BPM)</label>
+      <input type="number" class="form-control" name="heart_rate" placeholder="e.g. 78" min="20" max="220">
     </div>
     <div class="mb-3">
       <label class="form-label">Blood Pressure (sys/dia)</label>
-      <input class="form-control" name="blood_pressure" placeholder="120/80">
+      <input class="form-control" name="blood_pressure" placeholder="e.g. 120/80">
     </div>
     <div class="mb-3">
       <label class="form-label">Temperature (°C)</label>
-      <input type="number" step="0.1" class="form-control" name="temperature" placeholder="37.2">
+      <input type="number" step="0.1" class="form-control" name="temperature" placeholder="e.g. 37.2" min="35" max="42">
     </div>
     <button type="submit" class="btn btn-primary">Validate</button>
   </form>
 
   <div class="mt-3">
+    <h4>Result:</h4>
     <pre id="result">Awaiting submission...</pre>
   </div>
 </div>
 
+<script src="/static/auth.js"></script>
 <script>
+document.getElementById('authStatus').textContent = AUTH.isAuthenticated() ? '✓ Authenticated' : 'Not authenticated';
+
+// Redirect if not authenticated
+if(!AUTH.isAuthenticated()){
+  document.getElementById('validateForm').style.display = 'none';
+  document.getElementById('result').textContent = 'Authentication required. Please login first.';
+}
+
 document.getElementById('validateForm').addEventListener('submit', async function(e){
   e.preventDefault();
   const form = e.target;
-  const payload = {
-    heart_rate: form.heart_rate.value || undefined,
-    blood_pressure: form.blood_pressure.value || undefined,
-    temperature: form.temperature.value || undefined
-  };
+  const payload = {};
+  if(form.heart_rate.value) payload.heart_rate = parseInt(form.heart_rate.value);
+  if(form.blood_pressure.value) payload.blood_pressure = form.blood_pressure.value;
+  if(form.temperature.value) payload.temperature = parseFloat(form.temperature.value);
 
   try{
-    const res = await fetch('/api/health/validate', {
+    const res = await AUTH.fetchWithAuth('/api/health/validate', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
       body: JSON.stringify(payload)
     });
-    if(res.status === 401){
-      document.getElementById('result').textContent = 'Authentication required. Please login to validate data.';
-      return;
-    }
     const data = await res.json();
     document.getElementById('result').textContent = JSON.stringify(data, null, 2);
   }catch(err){
-    document.getElementById('result').textContent = 'Error validating data.';
+    document.getElementById('result').textContent = 'Error: ' + err.message;
   }
 });
 </script>

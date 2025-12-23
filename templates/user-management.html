@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Management - Health App</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-primary navbar-expand-lg">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/dashboard">Health App</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link" href="/dashboard">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="/stats">Advanced Stats</a></li>
+        <li class="nav-item"><a class="nav-link" href="/users-page">Users</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/user-management">User Management</a></li>
+        <li class="nav-item"><a class="nav-link" href="/validate-page">Validate Data</a></li>
+      </ul>
+    </div>
+    <span id="authStatus" class="text-white ms-3"></span>
+  </div>
+</nav>
+
+<div class="container py-4">
+  <div class="row mb-4">
+    <div class="col-md-8">
+      <h1>User Management</h1>
+    </div>
+    <div class="col-md-4">
+      <button class="btn btn-success float-end" data-bs-toggle="modal" data-bs-target="#addUserModal">+ Add User</button>
+    </div>
+  </div>
+
+  <div id="alert" class="alert" style="display: none;"></div>
+
+  <table class="table table-striped">
+    <thead class="table-dark">
+      <tr>
+        <th>Username</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="usersList">
+      <tr>
+        <td colspan="2" class="text-center text-muted">Loading users...</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add New User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="addAlert" class="alert" style="display: none;"></div>
+        <form id="addUserForm">
+          <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input type="text" class="form-control" id="newUsername" placeholder="Min 3 characters" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" id="newPassword" placeholder="Min 6 characters" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Create User</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Password Modal -->
+<div class="modal fade" id="editPasswordModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Change Password</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="editAlert" class="alert" style="display: none;"></div>
+        <form id="editPasswordForm">
+          <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input type="text" class="form-control" id="editUsername" disabled>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">New Password</label>
+            <input type="password" class="form-control" id="editPassword" placeholder="Min 6 characters" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Update Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/auth.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.getElementById('authStatus').textContent = AUTH.isAuthenticated() ? '✓ Authenticated' : 'Not authenticated';
+
+// Check if admin
+if(!AUTH.isAuthenticated()) {
+  document.body.innerHTML = `
+    <div class="alert alert-warning m-4">
+      <h4>Authentication Required</h4>
+      <p>Please <a href="/">login</a> first.</p>
+    </div>
+  `;
+}
+
+let editingUsername = null;
+
+// Load users on page load
+loadUsers();
+
+async function loadUsers() {
+  try {
+    const res = await AUTH.fetchWithAuth('/api/auth/users');
+    const data = await res.json();
+    
+    if (!res.ok) {
+      if (res.status === 403) {
+        document.getElementById('usersList').innerHTML = `
+          <tr><td colspan="2" class="text-center text-danger"><strong>Admin access required</strong></td></tr>
+        `;
+      }
+      return;
+    }
+    
+    const tbody = document.getElementById('usersList');
+    tbody.innerHTML = '';
+    
+    if (data.data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">No users found</td></tr>';
+      return;
+    }
+    
+    data.data.forEach(user => {
+      const row = document.createElement('tr');
+      const isAdmin = user.username === 'admin';
+      row.innerHTML = `
+        <td>${user.username} ${isAdmin ? '<span class="badge bg-warning">Admin</span>' : ''}</td>
+        <td>
+          <button class="btn btn-sm btn-warning" onclick="editPassword('${user.username}')">Change Password</button>
+          ${!isAdmin ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${user.username}')">Delete</button>` : ''}
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+  } catch (error) {
+    showAlert('Error loading users: ' + error.message, 'danger');
+  }
+}
+
+// Add user
+document.getElementById('addUserForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newPassword').value;
+  
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const data = await res.json();
+    
+    if (res.ok) {
+      showAddAlert('User created successfully!', 'success');
+      document.getElementById('addUserForm').reset();
+      setTimeout(() => {
+        bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
+        loadUsers();
+      }, 1500);
+    } else {
+      showAddAlert(data.message || 'Failed to create user', 'danger');
+    }
+  } catch (error) {
+    showAddAlert('Error: ' + error.message, 'danger');
+  }
+});
+
+// Edit password
+function editPassword(username) {
+  editingUsername = username;
+  document.getElementById('editUsername').value = username;
+  document.getElementById('editPassword').value = '';
+  document.getElementById('editAlert').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('editPasswordModal')).show();
+}
+
+document.getElementById('editPasswordForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const password = document.getElementById('editPassword').value;
+  
+  try {
+    const res = await AUTH.fetchWithAuth(`/api/auth/users/${editingUsername}/password`, {
+      method: 'PUT',
+      body: JSON.stringify({ password })
+    });
+    
+    const data = await res.json();
+    
+    if (res.ok) {
+      showEditAlert('Password updated successfully!', 'success');
+      setTimeout(() => {
+        bootstrap.Modal.getInstance(document.getElementById('editPasswordModal')).hide();
+        loadUsers();
+      }, 1500);
+    } else {
+      showEditAlert(data.message || 'Failed to update password', 'danger');
+    }
+  } catch (error) {
+    showEditAlert('Error: ' + error.message, 'danger');
+  }
+});
+
+// Delete user
+async function deleteUser(username) {
+  if (!confirm(`Delete user '${username}'? This cannot be undone.`)) return;
+  
+  try {
+    const res = await AUTH.fetchWithAuth(`/api/auth/users/${username}`, { method: 'DELETE' });
+    const data = await res.json();
+    
+    if (res.ok) {
+      showAlert('User deleted successfully!', 'success');
+      loadUsers();
+    } else {
+      showAlert(data.message || 'Failed to delete user', 'danger');
+    }
+  } catch (error) {
+    showAlert('Error: ' + error.message, 'danger');
+  }
+}
+
+function showAlert(message, type) {
+  const alertDiv = document.getElementById('alert');
+  alertDiv.className = `alert alert-${type}`;
+  alertDiv.textContent = message;
+  alertDiv.style.display = 'block';
+}
+
+function showAddAlert(message, type) {
+  const alertDiv = document.getElementById('addAlert');
+  alertDiv.className = `alert alert-${type}`;
+  alertDiv.textContent = message;
+  alertDiv.style.display = 'block';
+}
+
+function showEditAlert(message, type) {
+  const alertDiv = document.getElementById('editAlert');
+  alertDiv.className = `alert alert-${type}`;
+  alertDiv.textContent = message;
+  alertDiv.style.display = 'block';
+}
+</script>
+
+</body>
+</html>

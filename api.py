@@ -111,6 +111,18 @@ def users_page():
     return render_template('users.html')
 
 
+@app.route('/user-management', methods=['GET'])
+def user_management():
+    """Serve user management page (admin only)"""
+    return render_template('user-management.html')
+
+
+@app.route('/register', methods=['GET'])
+def register_page():
+    """Serve registration page"""
+    return render_template('register.html')
+
+
 @app.route('/api/', methods=['GET'])
 def api_home():
     """API documentation"""
@@ -349,10 +361,17 @@ def validate_health_data():
     try:
         data = request.get_json()
         
-        if not data:
+        if data is None:
             return jsonify({
                 "status": "error",
-                "message": "No data provided"
+                "message": "No JSON data provided"
+            }), 400
+        
+        # Check if at least one field is provided
+        if not any(k in data for k in ['heart_rate', 'blood_pressure', 'temperature']):
+            return jsonify({
+                "status": "error",
+                "message": "Please provide at least one health metric (heart_rate, blood_pressure, or temperature)"
             }), 400
         
         errors = []

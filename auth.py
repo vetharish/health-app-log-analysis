@@ -189,3 +189,88 @@ def logout():
             "username": request.username
         }
     }), 200
+
+
+# ======================================
+# User Management Routes (Admin Only)
+# ======================================
+
+def admin_required(f):
+    """Decorator to require admin privileges"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not hasattr(request, 'username') or request.username != 'admin':
+            return jsonify({
+                "status": "error",
+                "message": "Admin access required"
+            }), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+@auth_bp.route('/users', methods=['GET'])
+@token_required
+@admin_required
+def get_all_users():
+    """Get all users (admin only)"""
+    users = [{"username": u} for u in USERS_DB.keys()]
+    return jsonify({
+        "status": "success",
+        "data": users
+    }), 200
+
+
+@auth_bp.route('/users/<username>', methods=['DELETE'])
+@token_required
+@admin_required
+def delete_user(username):
+    """Delete a user (admin only)"""
+    if username == 'admin':
+        return jsonify({
+            "status": "error",
+            "message": "Cannot delete admin user"
+        }), 400
+    
+    if username not in USERS_DB:
+        return jsonify({
+            "status": "error",
+            "message": "User not found"
+        }), 404
+    
+    del USERS_DB[username]
+    return jsonify({
+        "status": "success",
+        "message": f"User '{username}' deleted"
+    }), 200
+
+
+@auth_bp.route('/users/<username>/password', methods=['PUT'])
+@token_required
+@admin_required
+def update_user_password(username):
+    """Update user password (admin only)"""
+    if username not in USERS_DB:
+        return jsonify({
+            "status": "error",
+            "message": "User not found"
+        }), 404
+    
+    data = request.get_json()
+    if not data or 'password' not in data:
+        return jsonify({
+            "status": "error",
+            "message": "Password is required"
+        }), 400
+    
+    password = data['password'].strip()
+    if len(password) < 6:
+        return jsonify({
+            "status": "error",
+            "message": "Password must be at least 6 characters"
+        }), 400
+    
+    USERS_DB[username] = password
+    return jsonify({
+        "status": "success",
+        "message": f"Password updated for user '{username}'"
+    }), 200
